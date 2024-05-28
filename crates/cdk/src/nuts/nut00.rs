@@ -148,6 +148,8 @@ pub struct Proof {
     #[serde(deserialize_with = "witness_deserialize")]
     pub witness: Option<Signatures>,
     /// DLEQ Proof
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub dleq: Option<ProofDleq>,
 }
 
@@ -182,12 +184,28 @@ impl PartialOrd for Proof {
     }
 }
 
+impl AsRef<Proof> for Proof {
+    fn as_ref(&self) -> &Proof {
+        &self
+    }
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
 pub enum CurrencyUnit {
     #[default]
     Sat,
     Usd,
     Custom(String),
+}
+
+impl CurrencyUnit {
+    pub fn as_str(&self) -> &str {
+        match self {
+            Self::Sat => "sat",
+            Self::Usd => "usd",
+            Self::Custom(s) => s.as_str(),
+        }
+    }
 }
 
 impl<S> From<S> for CurrencyUnit

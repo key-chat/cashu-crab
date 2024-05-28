@@ -50,7 +50,7 @@ impl fmt::Display for KeySetVersion {
 /// which mint or keyset it was generated from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Id {
-    version: KeySetVersion,
+    pub version: KeySetVersion,
     id: [u8; Self::STRLEN],
 }
 

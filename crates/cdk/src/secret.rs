@@ -61,6 +61,10 @@ impl Secret {
         self.as_bytes().to_vec()
     }
 
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
     pub fn is_p2pk(&self) -> bool {
         use crate::nuts::Kind;
 

@@ -40,6 +40,10 @@ impl UncheckedUrl {
         let url: Url = self.try_into()?;
         Ok(url.join(path)?)
     }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
 }
 
 impl<S> From<S> for UncheckedUrl
