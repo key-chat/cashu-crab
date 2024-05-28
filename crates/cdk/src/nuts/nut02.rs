@@ -6,6 +6,7 @@ use core::fmt;
 use core::str::FromStr;
 use std::collections::BTreeMap;
 
+use base64::Engine;
 use bitcoin::hashes::sha256::Hash as Sha256;
 use bitcoin::hashes::{Hash, HashEngine};
 use serde::{Deserialize, Deserializer, Serialize};
@@ -21,18 +22,23 @@ use crate::Amount;
 pub enum Error {
     #[error(transparent)]
     HexError(#[from] hex::Error),
+    #[error(transparent)]
+    Base64Error(#[from] base64::DecodeError),
     #[error("NUT02: ID length invalid")]
     Length,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum KeySetVersion {
+    // not use, only for compat for base64Version
+    VersionBs,
     Version00,
 }
 
 impl fmt::Display for KeySetVersion {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            KeySetVersion::VersionBs => f.write_str("bs"),
             KeySetVersion::Version00 => f.write_str("00"),
         }
     }
@@ -50,11 +56,16 @@ pub struct Id {
 
 impl Id {
     const STRLEN: usize = 14;
+    const STRLEN_BASE64: usize = 12;
 }
 
 impl TryFrom<Id> for u64 {
     type Error = Error;
     fn try_from(value: Id) -> Result<Self, Self::Error> {
+        if value.version == KeySetVersion::VersionBs {
+            return Err(Error::Length);
+        }
+
         let hex_bytes: [u8; 8] = hex::decode(value.to_string())?
             .try_into()
             .map_err(|_| Error::Length)?;
@@ -67,6 +78,10 @@ impl TryFrom<Id> for u64 {
 
 impl fmt::Display for Id {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.version == KeySetVersion::VersionBs {
+            return f.write_str(std::str::from_utf8(&self.id[..Self::STRLEN_BASE64]).unwrap());
+        }
+
         f.write_str(&format!(
             "{}{}",
             self.version,
@@ -81,6 +96,18 @@ impl FromStr for Id {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         // Check if the string length is valid
         if s.len() != 16 {
+            if s.len() == 12 {
+                let _bytes = base64::engine::general_purpose::STANDARD.decode(s)?;
+                let mut id = [0u8; Self::STRLEN];
+                id[0..Self::STRLEN_BASE64].copy_from_slice(s[0..Self::STRLEN_BASE64].as_bytes());
+
+                let it = Self {
+                    version: KeySetVersion::VersionBs,
+                    id,
+                };
+                return Ok(it);
+            }
+
             return Err(Error::Length);
         }
 
@@ -127,6 +154,7 @@ impl<'de> Deserialize<'de> for Id {
                         v
                     )),
                     Error::HexError(e) => E::custom(e),
+                    Error::Base64Error(e) => E::custom(e),
                 })
             }
         }
@@ -159,11 +187,7 @@ impl From<&Keys> for Id {
         // First 9 bytes of hash will encode as the first 12 Base64 characters later
         Self {
             version: KeySetVersion::Version00,
-            id: hex_of_hash[0..Self::STRLEN]
-                .as_bytes()
-                .to_owned()
-                .try_into()
-                .unwrap(),
+            id: hex_of_hash[0..Self::STRLEN].as_bytes().try_into().unwrap(),
         }
     }
 }
